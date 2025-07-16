@@ -24,9 +24,9 @@ class FullyConnectedLayer():
         self.output_neurons: int = output_neurons
 
 class CNN(nn.Module):
-    def __init__(self, input_channels: int, input_size: int, num_classes: int, filters: list[Filter], pools: list[Pool], fcls: list[FullyConnectedLayer]):
+    def __init__(self, input_channels: int, input_size: int, num_classes: int, filters: list[Filter], pools: list[Pool], fcls: list[FullyConnectedLayer], dropout: float = 0.3):
         super().__init__()
-
+        self.dropout = nn.Dropout(p=self.dropout)
         self.convs: nn.ModuleList = nn.ModuleList()
         self.pools: nn.ModuleList = nn.ModuleList()
         self.fcs: nn.ModuleList = nn.ModuleList()
@@ -62,6 +62,7 @@ class CNN(nn.Module):
 
         for fc in self.fcs:
             x = F.relu(fc(x))
+            x = self.dropout(x)
 
         # returns 'logits', NOT the final classification - pass into cross entropy loss during training
         x = self.output_layer(x)
