@@ -64,6 +64,7 @@ class CNN(nn.Module):
             x = F.relu(fc(x))
             x = self.dropout(x)
 
+
         # returns 'logits', NOT the final classification - pass into cross entropy loss during training
         x = self.output_layer(x)
         return x

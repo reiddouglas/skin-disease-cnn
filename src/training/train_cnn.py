@@ -91,12 +91,12 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
             'validation_loss': val_loss
         }, f"models/model_fold_{fold+1}_epoch_{epoch+1}.pth")
 
-        # Check for early stopping
+        # early stopping check
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            counter = 0  # Reset counter
+            counter = 0
         else:
             counter += 1
             if counter >= patience:
                 print("Early stopping triggered!")
-                break  # Stop training
+                break 
