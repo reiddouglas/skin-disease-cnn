@@ -26,7 +26,7 @@ class FullyConnectedLayer():
 class CNN(nn.Module):
     def __init__(self, input_channels: int, input_size: int, num_classes: int, filters: list[Filter], pools: list[Pool], fcls: list[FullyConnectedLayer], dropout: float = 0.3):
         super().__init__()
-        self.dropout = nn.Dropout(p=self.dropout)
+        self.dropout = nn.Dropout(p=dropout)
         self.convs: nn.ModuleList = nn.ModuleList()
         self.pools: nn.ModuleList = nn.ModuleList()
         self.fcs: nn.ModuleList = nn.ModuleList()
@@ -50,6 +50,8 @@ class CNN(nn.Module):
             prev_neurons = layer.output_neurons
         
         self.output_layer = nn.Linear(prev_neurons, num_classes)
+
+        print(self.dropout, self.convs, self.pools, self.fcs)
     
     def forward(self,x: torch.Tensor) -> torch.Tensor:
         """
@@ -58,7 +60,7 @@ class CNN(nn.Module):
         for i in range(len(self.convs)):
             x = self.pools[i](F.relu(self.convs[i](x)))
 
-        x = torch.flatten(x,1)
+        x = x.view(x.size(0), -1)
 
         for fc in self.fcs:
             x = F.relu(fc(x))

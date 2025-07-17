@@ -1,22 +1,36 @@
 from cnn_models import *
+from utils import *
 import torch.optim as optim
 from sklearn.model_selection import KFold
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, Subset
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 import numpy as np
 import torch
 
+script_dir = Path(__file__).parent.resolve()
+models_dir = script_dir / 'models'
+models_dir.mkdir(exist_ok=True)
+
 k: int = 5
-batch_size: int = 128
-epochs: int = 100
+batch_size: int = 32
+epochs: int = 20
 patience: int = 5
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+torch.cuda.empty_cache()
+print(f"Using {device}")
 kfold = KFold(n_splits=k)
 
-# TODO: load data properly
-filepath: str = '../data/data.npy'
-train_dataset = np.load(file=filepath)
+dir = 'training_data'
+
+images = get_images_from_file(dir)
+images = images.transpose(0,3,1,2)
+tensor_x = torch.Tensor(images)
+# TODO: replace with real labels
+tensor_y = torch.LongTensor(np.random.randint(2, size=(images.shape[0])))
+
+train_dataset = TensorDataset(tensor_x, tensor_y)
 
 for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
     print(f"Fold {fold+1}/{k}")
@@ -25,9 +39,17 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
     train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_subset, batch_size=batch_size)
 
-    # TODO: fill this out with hyperparameters
-    model: CNN = CNN()
+    # TODO replace with real class count
+    classes = 2
+    model = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    model.classifier[0] = nn.Dropout(p=0.3)
+    model.classifier[1] = nn.Linear(model.classifier[1].in_features, classes)
     model.to(device=device)
+    
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), weight_decay=1e-5)
 
@@ -35,16 +57,16 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
     total_train_samples: int = 0
 
     # early stopping variables
-    best_val_loss: float = 0
+    best_val_loss: float = float('inf')
     counter: int = 0
 
-    model.train()
     for epoch in range(epochs):
         print(f"Epoch [{epoch+1}/{epochs}]")
         running_loss: float = 0.0
         train_loss: float = 0.0
-        val_loss: float = float('inf')
+        val_loss: float = 0.0
 
+        model.train()
         for i, data in enumerate(train_loader):
 
             inputs, labels = data
@@ -83,13 +105,7 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
         
         val_loss /= total_val_samples
 
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'training_loss': train_loss,
-            'validation_loss': val_loss
-        }, f"models/model_fold_{fold+1}_epoch_{epoch+1}.pth")
+        print(f"Model on fold {fold+1}, epoch {epoch+1}\n\ttraining_loss: {train_loss}\n\tvalidation_loss: {val_loss}")
 
         # early stopping check
         if val_loss < best_val_loss:
@@ -100,3 +116,13 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
             if counter >= patience:
                 print("Early stopping triggered!")
                 break 
+    
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'training_loss': train_loss,
+        'validation_loss': val_loss
+    }, script_dir / f"models/model_fold_{fold+1}_epoch_{epoch+1}.pth")
+
+    print(f"Saved model on fold {fold+1}\n\ttraining_loss: {train_loss}\n\tvalidation_loss: {val_loss}")
