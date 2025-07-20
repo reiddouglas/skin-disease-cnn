@@ -25,10 +25,10 @@ def save_image(filename: str):
     image = Image.fromarray(unnormalized_array)
     image.save(f'{filename}.png')
 
-def get_filenames(dir: str):
-    directory = Path(script_dir / dir)
-    npy_files = [f.name for f in directory.iterdir() if f.is_file() and f.suffix == '.npy']
-    return np.array(npy_files)
+def get_filenames(dir: str, ext: str = ''):
+    directory = Path(dir)
+    files = [f.name for f in directory.iterdir() if f.is_file() and f.suffix == ext]
+    return np.array(files)
 
 def get_images_from_file(dir: str):
     images = []

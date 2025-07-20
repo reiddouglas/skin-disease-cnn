@@ -1,6 +1,7 @@
 # Custom
 *.npy
 *.pth
+*.npz
 
 
 # Byte-compiled / optimized / DLL files
