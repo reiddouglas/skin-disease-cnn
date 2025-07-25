@@ -2,7 +2,10 @@
 *.npy
 *.pth
 *.npz
-
+.vscode
+src/training/figures
+src/training/models
+src/training/training_data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

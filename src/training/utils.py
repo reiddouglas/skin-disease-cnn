@@ -13,9 +13,8 @@ def get_image(filename: str):
     array = np.load(filename)
     return array
 
-def show_image(filename: str):
-    array = get_image(filename)
-    unnormalized_array = (((array + 1) / 2) * 255).clip(0, 255).astype(np.uint8)
+def show_image(array):
+    unnormalized_array = (array * 255).clip(0, 255).astype(np.uint8)
     image = Image.fromarray(unnormalized_array)
     image.show()
 
