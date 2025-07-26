@@ -137,6 +137,8 @@ def get_class_weights(npz_file_paths):
 
     if len(label_counts.keys()) <= 1:
         raise ValueError(f"Only singular label in dataset: {label_counts}")
+    
+    print(label_counts)
 
     # note: the number of classes is based on the largest integer label
     total = sum(label_counts.values())
@@ -146,6 +148,7 @@ def get_class_weights(npz_file_paths):
 
     for i in range(classes+1):
         count = label_counts.get(i, 0)
+        print(f"Number of class {i}: {count}")
         if count > 0:
             weight = total / (count * classes)
         else:
@@ -259,6 +262,10 @@ if __name__ == '__main__':
             running_loss: float = 0.0
             train_loss: float = 0.0
             val_loss: float = 0.0
+            train_accuracy: float = 0.0
+            total_train_samples: int = 0
+            val_accuracy: float = 0.0
+            total_val_samples: int = 0
 
             # confusion matrix
             TP: int = 0
@@ -266,8 +273,6 @@ if __name__ == '__main__':
             FP: int = 0
             FN: int = 0
             correct: int = 0
-
-            accuracy_fn = Accuracy(task='multiclass', num_classes=classes).to(device=device)
 
             model.train()
             for i, data in enumerate(train_loader):
@@ -290,8 +295,10 @@ if __name__ == '__main__':
                 running_loss += loss.item() * batch_size
                 total_train_samples += batch_size
                 
-                preds = torch.argmax(outputs, dim=1).to(device=device)
-                correct += torch.sum(preds == labels).to(device=device)
+                probs = torch.softmax(outputs, dim=1)
+                preds = torch.argmax(probs, dim=1)
+                
+                correct += torch.sum(preds == labels)
 
 
             train_loss = running_loss
@@ -323,7 +330,8 @@ if __name__ == '__main__':
                     val_loss += loss.item() * batch_size
                     total_val_samples += batch_size
 
-                    preds = torch.argmax(outputs, dim=1)
+                    probs = torch.softmax(outputs, dim=1)
+                    preds = torch.argmax(probs, dim=1)
                     labels = labels.long().view(-1)
 
                     TP += ((preds == 1) & (labels == 1)).sum().item()
