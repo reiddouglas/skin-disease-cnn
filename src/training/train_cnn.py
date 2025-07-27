@@ -157,6 +157,14 @@ def get_class_weights(npz_file_paths):
     
     return class_weights
 
+def get_dataset_size(npz_file_paths):
+    count: int = 0
+    for path in npz_file_paths:
+        with np.load(training_dir / path) as data:
+            for label in data['target']:
+                count += 1
+    return count
+
     
 
 # custom dataset to ensure not all images need to be loaded into memory at once
@@ -175,8 +183,8 @@ class NPZBatchDataset(Dataset):
             all_labels.append(labels)
 
         # Stack all loaded arrays into single tensors
-        self.images = torch.tensor(np.concatenate(all_images, axis=0), dtype=torch.float32, device=device)
-        self.labels = torch.tensor(np.concatenate(all_labels, axis=0), dtype=torch.long, device=device)
+        self.images = torch.tensor(np.concatenate(all_images, axis=0), dtype=torch.float32)
+        self.labels = torch.tensor(np.concatenate(all_labels, axis=0), dtype=torch.long)
 
     def __len__(self):
         return len(self.labels)
@@ -194,8 +202,8 @@ class NPZBatchDataset(Dataset):
 # training hyperparameters
 k: int = 5
 kfold = KFold(n_splits=k, shuffle=True, random_state=71)
-batch_size: int = 32
-epochs: int = 100
+batch_size_tot: int = 32
+epochs: int = 1
 patience: int = 5
 
 if __name__ == '__main__':
@@ -208,17 +216,18 @@ if __name__ == '__main__':
 
     # load files into the dataset
     files = get_filenames(training_dir, ext='.npz')
-    train_dataset = NPZBatchDataset(files)
 
     # compute the class weights for loss function (for class imbalance)
     class_weights = get_class_weights(files)
+    dataset_size = get_dataset_size(files)
+    train_dataset = NPZBatchDataset(files)
     print(f"Class weights: {class_weights}")
     class_weights_tensor = torch.tensor(class_weights, dtype=torch.float, device=device)
 
     classes = len(class_weights)
 
     # training loop
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(np.arange(dataset_size))):
 
         training_losses = []
         validation_losses = []
@@ -229,11 +238,13 @@ if __name__ == '__main__':
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(train_dataset, val_idx)
 
-        train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=batch_size)
+        train_loader = DataLoader(train_subset, batch_size=batch_size_tot, shuffle=True)
+        val_loader = DataLoader(val_subset, batch_size=batch_size_tot)
 
         total_train_batches = len(train_loader)
         total_val_batches = len(val_loader)
+
+        print(f"Batch size: {train_loader.batch_size}")
 
         model = efficientnet_b4(weights=EfficientNet_B4_Weights.DEFAULT)
 
