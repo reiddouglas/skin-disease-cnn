@@ -138,8 +138,6 @@ def get_class_weights(npz_file_paths):
     if len(label_counts.keys()) <= 1:
         raise ValueError(f"Only singular label in dataset: {label_counts}")
     
-    print(label_counts)
-
     # note: the number of classes is based on the largest integer label
     total = sum(label_counts.values())
     classes = max(label_counts.keys())
@@ -202,8 +200,8 @@ class NPZBatchDataset(Dataset):
 # training hyperparameters
 k: int = 5
 kfold = KFold(n_splits=k, shuffle=True, random_state=71)
-batch_size_tot: int = 32
-epochs: int = 1
+batch_size_tot: int = 64
+epochs: int = 150
 patience: int = 5
 
 if __name__ == '__main__':
@@ -244,7 +242,6 @@ if __name__ == '__main__':
         total_train_batches = len(train_loader)
         total_val_batches = len(val_loader)
 
-        print(f"Batch size: {train_loader.batch_size}")
 
         model = efficientnet_b4(weights=EfficientNet_B4_Weights.DEFAULT)
 
