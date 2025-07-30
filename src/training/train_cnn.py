@@ -125,81 +125,89 @@ def plot_prf(confusion_arr, fold):
     plt.savefig(figures_dir / f"model_fold_{fold+1}_prf.png", dpi=300)
     plt.close()
 
-def get_class_weights(npz_file_paths):
+def get_class_weights(pt_file_paths):
     label_counts = Counter()
-    for path in npz_file_paths:
-        with np.load(training_dir / path) as data:
-            for label in data['target']:
-                label_counts[int(label)] += 1
-    
+
+    for path in pt_file_paths:
+        print(training_dir / path)
+        data = torch.load(training_dir / path)
+        targets = data['target']
+        label_counts.update(map(int, targets.tolist()))
+
     if not label_counts:
         raise ValueError("No labels found in the dataset.")
 
-    if len(label_counts.keys()) <= 1:
+    if len(label_counts) <= 1:
         raise ValueError(f"Only singular label in dataset: {label_counts}")
     
-    # note: the number of classes is based on the largest integer label
     total = sum(label_counts.values())
-    classes = max(label_counts.keys())
+    classes = max(label_counts.keys()) + 1  # inclusive of highest label index
 
     class_weights = []
-
-    for i in range(classes+1):
+    for i in range(classes):
         count = label_counts.get(i, 0)
         print(f"Number of class {i}: {count}")
         if count > 0:
             weight = total / (count * classes)
         else:
-            raise ValueError(f"No labels found in dataset with value {i} despite max value being {classes}: {label_counts}")
+            raise ValueError(f"No samples found for label {i}, though max class index is {classes - 1}")
         class_weights.append(weight)
-    
-    return class_weights
 
-def get_dataset_size(npz_file_paths):
-    count: int = 0
-    for path in npz_file_paths:
-        with np.load(training_dir / path) as data:
-            for label in data['target']:
-                count += 1
+    return torch.FloatTensor(class_weights)
+
+def get_dataset_size(pt_file_paths):
+    count = 0
+
+    for path in pt_file_paths:
+        data = torch.load(training_dir / path)
+        count += len(data['target'])
+
     return count
 
     
 
 # custom dataset to ensure not all images need to be loaded into memory at once
-class NPZBatchDataset(Dataset):
-    def __init__(self, npz_file_paths, transform=None):
-        self.transform = transform
-        all_images = []
-        all_labels = []
 
-        # Load everything into memory at once
-        for path in npz_file_paths:
-            data = np.load(training_dir / path)
-            images = data['image']   # shape: (N, C, H, W) or (N, H, W), depending on your data
-            labels = data['target'] # shape: (N,)
-            all_images.append(images)
-            all_labels.append(labels)
+class PTBatchDataset(Dataset):
+    def __init__(self, pt_file_paths):
+        self.pt_file_paths = [Path(p) for p in pt_file_paths]
+        self.data_dir = training_dir
 
-        # Stack all loaded arrays into single tensors
-        self.images = torch.tensor(np.concatenate(all_images, axis=0), dtype=torch.float32)
-        self.labels = torch.tensor(np.concatenate(all_labels, axis=0), dtype=torch.long)
+        # Build a global index map: list of (file_idx, local_index)
+        self.index_map = []
+        self.file_sizes = []
+        for file_idx, file_path in enumerate(self.pt_file_paths):
+            data = torch.load(self.data_dir / file_path)
+            size = len(data['target'])
+            self.file_sizes.append(size)
+            self.index_map.extend([(file_idx, i) for i in range(size)])
+
+        # Cache for currently loaded file
+        self.current_file_idx = None
+        self.cached_data = None
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.index_map)
 
     def __getitem__(self, idx):
-        image = self.images[idx]
-        label = self.labels[idx]
-        
-        if self.transform:
-            image = self.transform(image)
-        
-        return image, label
+        file_idx, local_idx = self.index_map[idx]
+        if self.current_file_idx != file_idx:
+            # Cache new file
+            path = self.data_dir / self.pt_file_paths[file_idx]
+
+            self.cached_data = torch.load(path)
+            self.current_file_idx = file_idx
+
+        image = self.cached_data['image'][local_idx]
+        target = self.cached_data['target'][local_idx]
+
+        return image, target
+
 
 
 # training hyperparameters
 k: int = 5
-kfold = KFold(n_splits=k, shuffle=True, random_state=71)
+kfold = KFold(n_splits=k)
 batch_size_tot: int = 64
 epochs: int = 150
 patience: int = 5
@@ -208,17 +216,16 @@ if __name__ == '__main__':
 
     # try to use CUDA (graphics card)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    torch.cuda.empty_cache()
     print(f"Using {device}")
-    print(f"{torch.cuda.memory_allocated()}")
+    torch.cuda.empty_cache()
 
     # load files into the dataset
-    files = get_filenames(training_dir, ext='.npz')
+    files = get_filenames(training_dir, ext='.pt')
 
     # compute the class weights for loss function (for class imbalance)
     class_weights = get_class_weights(files)
     dataset_size = get_dataset_size(files)
-    train_dataset = NPZBatchDataset(files)
+    train_dataset = PTBatchDataset(files)
     print(f"Class weights: {class_weights}")
     class_weights_tensor = torch.tensor(class_weights, dtype=torch.float, device=device)
 
@@ -236,8 +243,8 @@ if __name__ == '__main__':
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(train_dataset, val_idx)
 
-        train_loader = DataLoader(train_subset, batch_size=batch_size_tot, shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=batch_size_tot)
+        train_loader = DataLoader(train_subset, batch_size=batch_size_tot, shuffle=False)
+        val_loader = DataLoader(val_subset, batch_size=batch_size_tot,  shuffle=False)
 
         total_train_batches = len(train_loader)
         total_val_batches = len(val_loader)

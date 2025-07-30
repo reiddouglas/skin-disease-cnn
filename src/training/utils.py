@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 from pathlib import Path
 import os
+import torch
 
 script_dir = Path(__file__).parent.resolve()
 
@@ -35,3 +36,18 @@ def get_images_from_file(dir: str):
     for file in filenames:
         images.append(get_image(script_dir / dir / file))
     return np.array(images)
+
+def convert_npz_to_pt(npz_dir, output_dir):
+    npz_dir = Path(npz_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for npz_file in npz_dir.glob("*.npz"):
+        with np.load(npz_file, allow_pickle=False) as data:
+            image_tensor = torch.tensor(data['image'], dtype=torch.float32)
+            target_tensor = torch.tensor(data['target'], dtype=torch.long)
+
+        pt_path = output_dir / (npz_file.stem + ".pt")
+        torch.save({'image': image_tensor, 'target': target_tensor}, pt_path)
+
+convert_npz_to_pt(script_dir / 'training_data', script_dir / 'training_data')
