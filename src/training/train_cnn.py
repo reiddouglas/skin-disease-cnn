@@ -129,8 +129,9 @@ def get_class_weights(pt_file_paths):
     label_counts = Counter()
 
     for path in pt_file_paths:
-        print(training_dir / path)
+        print(f"Loading {training_dir / path}")
         data = torch.load(training_dir / path)
+        print(f"Loaded {training_dir / path}")
         targets = data['target']
         label_counts.update(map(int, targets.tolist()))
 
@@ -177,7 +178,9 @@ class PTBatchDataset(Dataset):
         self.index_map = []
         self.file_sizes = []
         for file_idx, file_path in enumerate(self.pt_file_paths):
+            print(f"Loading {self.data_dir / file_path}")
             data = torch.load(self.data_dir / file_path)
+            print(f"Loaded {self.data_dir / file_path}")
             size = len(data['target'])
             self.file_sizes.append(size)
             self.index_map.extend([(file_idx, i) for i in range(size)])
@@ -210,7 +213,7 @@ k: int = 5
 kfold = KFold(n_splits=k)
 batch_size_tot: int = 64
 epochs: int = 150
-patience: int = 5
+patience: int = 10
 
 if __name__ == '__main__':
 
